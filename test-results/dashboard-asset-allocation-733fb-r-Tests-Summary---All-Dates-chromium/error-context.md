@@ -21,7 +21,6 @@ Received: false
 # Test source
 
 ```ts
-  316 |           allAssetsValue: `₹${etfFromAll.toLocaleString()}`,
   317 |           perfChartValue: `₹${etfFromPerf.toLocaleString()}`
   318 |         });
   319 | 
@@ -121,9 +120,9 @@ Received: false
   413 |     });
   414 | 
   415 |     // Assert both test types passed
-> 416 |     expect(allAssetsAllPassed).toBe(true);
-      |                                ^ Error: expect(received).toBe(expected) // Object.is equality
-  417 |     expect(filteredAllPassed).toBe(true);
+  416 |     expect(allAssetsAllPassed).toBe(true);
+> 417 |     expect(filteredAllPassed).toBe(true);
+      |                               ^ Error: expect(received).toBe(expected) // Object.is equality
   418 |   });
   419 | });
 ```
