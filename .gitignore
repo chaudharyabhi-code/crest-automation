@@ -22,3 +22,16 @@ logs/
 # Results and output files
 results/
 output/
+
+# Authentication tokens and credentials
+.auth/
+*.token
+token.json
+
+# Documentation files (optional - remove if you want to track them)
+*.md
+!README.md
+
+# Package lock files (optional - keep for team collaboration)
+# package-lock.json
+# yarn.lock
