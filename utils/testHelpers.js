@@ -347,18 +347,17 @@ ${dateDetails}
 
 /**
  * Compare benchmark performance values between API and SQL
+ * Requires EXACT match - no threshold allowed
  *
  * @param {object} params - Test parameters
  * @param {Array} params.apiData - API response data array
  * @param {string} params.sqlFilePath - Path to SQL file
- * @param {number} params.threshold - Comparison threshold % (default: 0.01 for 0.01%)
  * @param {string} params.testName - Name for logging
  * @returns {object} Comparison result
  */
 export async function compareBenchmarkValues({
   apiData,
   sqlFilePath,
-  threshold = 0.01,
   testName = 'Benchmark Values Comparison'
 }) {
   // Load and execute SQL query
@@ -408,13 +407,13 @@ export async function compareBenchmarkValues({
       y5: parseFloat(apiBenchmark.values['5Y'].replace(/[+%]/g, ''))
     };
 
-    // Compare each year
+    // Compare each year - EXACT match required
     const yearComparisons = [];
     ['y1', 'y2', 'y3', 'y4', 'y5'].forEach(year => {
       const apiVal = apiValues[year];
       const sqlVal = sqlBenchmark[year];
       const diff = Math.abs(apiVal - sqlVal);
-      const match = diff <= threshold;
+      const match = apiVal === sqlVal; // Exact match required
 
       yearComparisons.push({
         year,
@@ -454,7 +453,7 @@ export async function compareBenchmarkValues({
 
   const formattedReport = `
 === ${testName} ===
-Threshold:              ${threshold}%
+Match Type:             Exact Match Required (No Threshold)
 Total Benchmarks:       ${comparisons.length}
 All Values Match:       ${allMatch ? '✅ Yes' : '❌ No'}
 ${reportDetails}
@@ -463,7 +462,6 @@ ${reportDetails}
   return {
     match: allMatch,
     comparisons,
-    threshold,
     formattedReport
   };
 }

@@ -51,11 +51,10 @@ test.describe('Analysis Benchmark Comparison Tests', () => {
 
     console.log(`\nTotal Benchmarks in API: ${apiData.length}`);
 
-    // Compare with SQL
+    // Compare with SQL - Exact match required (no threshold)
     const result = await compareBenchmarkValues({
       apiData: apiData,
       sqlFilePath: 'benchmark_comparison.sql',
-      threshold: 0.01, // 0.01% threshold
       testName: 'Benchmark Values Comparison'
     });
 
@@ -67,7 +66,7 @@ test.describe('Analysis Benchmark Comparison Tests', () => {
       contentType: 'text/plain'
     });
 
-    // Assert all values match within threshold
+    // Assert all values match exactly (no threshold)
     expect(result.match).toBe(true);
   });
 });
