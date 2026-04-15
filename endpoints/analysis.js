@@ -55,4 +55,12 @@ export const analysisEndpoints = {
     const entityType = process.env.ENTITY_TYPE || 'asset';
     return `/api/v1/analysis/holdings?member_user_id=${userId}&asset_class_id=${assetClassId}&entity_type=${entityType}`;
   },
+
+  // Analysis Recent Dividends
+  recentDividends: (userId, fromDate, toDate) => {
+    let url = `/api/v1/analysis/overview/dividends/?member_user_id=${userId}`;
+    if (fromDate) url += `&from_date=${fromDate}`;
+    if (toDate) url += `&to_date=${toDate}`;
+    return url;
+  },
 };
