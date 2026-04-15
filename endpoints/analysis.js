@@ -63,4 +63,7 @@ export const analysisEndpoints = {
     if (toDate) url += `&to_date=${toDate}`;
     return url;
   },
+
+  // Analysis Benchmark Comparison
+  benchmarkComparison: (userId) => `/api/v1/analysis/performance/benchmark?member_user_id=${userId}`,
 };
