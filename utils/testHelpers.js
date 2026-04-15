@@ -258,3 +258,210 @@ Result:                 ${match ? '✅ Exact Match' : '❌ Mismatch'}
     formattedReport
   };
 }
+
+/**
+ * Validate benchmark as_of_date is today's date
+ *
+ * @param {object} params - Test parameters
+ * @param {string} params.sqlFilePath - Path to SQL file
+ * @param {string} params.testName - Name for logging
+ * @returns {object} Validation result
+ */
+export async function validateBenchmarkDate({
+  sqlFilePath,
+  testName = 'Benchmark Date Validation'
+}) {
+  // Load and execute SQL query
+  const fullSqlPath = sqlFilePath.startsWith('/')
+    ? sqlFilePath
+    : path.join(process.cwd(), 'queries', sqlFilePath);
+
+  const sqlQuery = fs.readFileSync(fullSqlPath, 'utf-8');
+  const dbResult = await dbClient.query(sqlQuery);
+
+  // Get today's date in YYYY-MM-DD format using local timezone
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+  // Debug logging
+  console.log(`\n[DEBUG] Today's date (Local): ${today}`);
+  console.log(`[DEBUG] Total rows from SQL: ${dbResult.rows.length}`);
+
+  // Check if all rows have today's date
+  const dateComparisons = [];
+  let allDatesValid = true;
+
+  const dateDetails = dbResult.rows.map((row, index) => {
+    // Handle different date formats from PostgreSQL
+    // Use local date conversion to avoid timezone issues
+    let rowDate;
+
+    if (row.as_of_date instanceof Date) {
+      // If it's already a Date object, use local date parts
+      const d = row.as_of_date;
+      rowDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    } else if (typeof row.as_of_date === 'string') {
+      // If it's a string, just take the date part (YYYY-MM-DD)
+      rowDate = row.as_of_date.split('T')[0];
+    } else {
+      // Fallback: convert to date using local timezone
+      const d = new Date(row.as_of_date);
+      rowDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    const isMatch = rowDate === today;
+    if (!isMatch) allDatesValid = false;
+
+    // Debug logging for each row
+    console.log(`[DEBUG] Row ${index + 1} - ${row.name}: raw=${row.as_of_date}, parsed=${rowDate}, match=${isMatch}`);
+
+    dateComparisons.push({
+      name: row.name,
+      rawDate: row.as_of_date,
+      parsedDate: rowDate,
+      isMatch
+    });
+
+    return `  ${index + 1}. ${row.name}: ${rowDate} ${isMatch ? '✅' : '❌ (expected: ' + today + ')'}`;
+  }).join('\n');
+
+  const formattedReport = `
+=== ${testName} ===
+Expected Date (Today):  ${today}
+Total Records:          ${dbResult.rows.length}
+All Dates Match:        ${allDatesValid ? '✅ Yes' : '❌ No'}
+
+Date Details:
+${dateDetails}
+`;
+
+  return {
+    valid: allDatesValid,
+    expectedDate: today,
+    totalRecords: dbResult.rows.length,
+    rows: dbResult.rows,
+    dateComparisons,
+    formattedReport
+  };
+}
+
+/**
+ * Compare benchmark performance values between API and SQL
+ * Requires EXACT match - no threshold allowed
+ *
+ * @param {object} params - Test parameters
+ * @param {Array} params.apiData - API response data array
+ * @param {string} params.sqlFilePath - Path to SQL file
+ * @param {string} params.testName - Name for logging
+ * @returns {object} Comparison result
+ */
+export async function compareBenchmarkValues({
+  apiData,
+  sqlFilePath,
+  testName = 'Benchmark Values Comparison'
+}) {
+  // Load and execute SQL query
+  const fullSqlPath = sqlFilePath.startsWith('/')
+    ? sqlFilePath
+    : path.join(process.cwd(), 'queries', sqlFilePath);
+
+  const sqlQuery = fs.readFileSync(fullSqlPath, 'utf-8');
+  const dbResult = await dbClient.query(sqlQuery);
+
+  // Create a map of SQL data by name for easy lookup
+  const sqlMap = {};
+  dbResult.rows.forEach(row => {
+    sqlMap[row.name] = {
+      y1: parseFloat(row.y1),
+      y2: parseFloat(row.y2),
+      y3: parseFloat(row.y3),
+      y4: parseFloat(row.y4),
+      y5: parseFloat(row.y5)
+    };
+  });
+
+  const comparisons = [];
+  let allMatch = true;
+
+  // Compare each benchmark
+  apiData.forEach(apiBenchmark => {
+    const name = apiBenchmark.name;
+    const sqlBenchmark = sqlMap[name];
+
+    if (!sqlBenchmark) {
+      comparisons.push({
+        name,
+        status: '❌ Not found in SQL',
+        match: false
+      });
+      allMatch = false;
+      return;
+    }
+
+    // Parse API values (remove "+" and "%" signs)
+    const apiValues = {
+      y1: parseFloat(apiBenchmark.values['1Y'].replace(/[+%]/g, '')),
+      y2: parseFloat(apiBenchmark.values['2Y'].replace(/[+%]/g, '')),
+      y3: parseFloat(apiBenchmark.values['3Y'].replace(/[+%]/g, '')),
+      y4: parseFloat(apiBenchmark.values['4Y'].replace(/[+%]/g, '')),
+      y5: parseFloat(apiBenchmark.values['5Y'].replace(/[+%]/g, ''))
+    };
+
+    // Compare each year - EXACT match required
+    const yearComparisons = [];
+    ['y1', 'y2', 'y3', 'y4', 'y5'].forEach(year => {
+      const apiVal = apiValues[year];
+      const sqlVal = sqlBenchmark[year];
+      const diff = Math.abs(apiVal - sqlVal);
+      const match = apiVal === sqlVal; // Exact match required
+
+      yearComparisons.push({
+        year,
+        apiValue: apiVal,
+        sqlValue: sqlVal,
+        diff: diff.toFixed(2),
+        match
+      });
+
+      if (!match) {
+        allMatch = false;
+      }
+    });
+
+    comparisons.push({
+      name,
+      yearComparisons,
+      allYearsMatch: yearComparisons.every(yc => yc.match)
+    });
+  });
+
+  // Build formatted report
+  let reportDetails = '';
+  comparisons.forEach(comp => {
+    reportDetails += `\n${comp.name}:\n`;
+    if (comp.status) {
+      reportDetails += `  ${comp.status}\n`;
+    } else {
+      comp.yearComparisons.forEach(yc => {
+        const yearLabel = yc.year.toUpperCase();
+        const status = yc.match ? '✅' : '❌';
+        reportDetails += `  ${yearLabel}: API=${yc.apiValue.toFixed(2)}%, SQL=${yc.sqlValue.toFixed(2)}%, Diff=${yc.diff}% ${status}\n`;
+      });
+      reportDetails += `  Overall: ${comp.allYearsMatch ? '✅ All Match' : '❌ Some Mismatch'}\n`;
+    }
+  });
+
+  const formattedReport = `
+=== ${testName} ===
+Match Type:             Exact Match Required (No Threshold)
+Total Benchmarks:       ${comparisons.length}
+All Values Match:       ${allMatch ? '✅ Yes' : '❌ No'}
+${reportDetails}
+`;
+
+  return {
+    match: allMatch,
+    comparisons,
+    formattedReport
+  };
+}
