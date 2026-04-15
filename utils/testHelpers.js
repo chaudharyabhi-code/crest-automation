@@ -210,3 +210,51 @@ Result:                 ${match ? '✅ Exact Match' : '❌ Mismatch'}
     formattedReport
   };
 }
+
+/**
+ * Compare dividends count - expects exact match
+ *
+ * @param {object} params - Test parameters
+ * @param {number} params.apiCount - Count from API (length of data array)
+ * @param {string} params.sqlFilePath - Path to SQL file
+ * @param {string} params.userId - User ID
+ * @param {string} params.testName - Name for logging
+ * @returns {object} Comparison result
+ */
+export async function compareDividendsCount({
+  apiCount,
+  sqlFilePath,
+  userId,
+  testName = 'Dividends Count Comparison'
+}) {
+  // Load and execute SQL query
+  const fullSqlPath = sqlFilePath.startsWith('/')
+    ? sqlFilePath
+    : path.join(process.cwd(), 'queries', sqlFilePath);
+
+  let sqlQuery = fs.readFileSync(fullSqlPath, 'utf-8');
+  sqlQuery = sqlQuery.replace(/{USER_ID}/g, userId);
+
+  const dbResult = await dbClient.query(sqlQuery);
+  const sqlCount = parseInt(dbResult.rows[0]?.total_count) || 0;
+
+  // Compare counts - must be exact match
+  const match = apiCount === sqlCount;
+  const diff = apiCount - sqlCount;
+
+  const formattedReport = `
+=== ${testName} ===
+API Dividends Count:    ${apiCount}
+DB Dividends Count:     ${sqlCount}
+Difference:             ${diff}
+Result:                 ${match ? '✅ Exact Match' : '❌ Mismatch'}
+`;
+
+  return {
+    match,
+    apiCount,
+    sqlCount,
+    diff,
+    formattedReport
+  };
+}
