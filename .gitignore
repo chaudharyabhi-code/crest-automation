@@ -35,3 +35,20 @@ token.json
 # Package lock files (optional - keep for team collaboration)
 # package-lock.json
 # yarn.lock
+# Added by code-review-graph
+.code-review-graph/
+
+.cursor
+.claude
+.windsurf
+.mcp.json
+.opencode.json
+.windsurfrules
+AGENT.node_modules
+CLAUDE.node_modules
+WINDSURF.node_modules
+GEMINI.md
+.cursorrules
+
+
+
