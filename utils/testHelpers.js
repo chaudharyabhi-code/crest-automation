@@ -465,3 +465,109 @@ ${reportDetails}
     formattedReport
   };
 }
+
+/**
+ * Compare risk contributors between API and SQL
+ * Compares name and percentage for each risk contributor
+ *
+ * @param {object} params - Test parameters
+ * @param {Array} params.apiData - API response data array (top_assets)
+ * @param {string} params.sqlFilePath - Path to SQL file
+ * @param {string} params.userId - User ID for SQL query replacement
+ * @param {string} params.testName - Name for logging
+ * @param {number} params.threshold - Percentage difference threshold (default: 0.01)
+ * @returns {object} Comparison result
+ */
+export async function compareRiskContributors({
+  apiData,
+  sqlFilePath,
+  userId,
+  testName = 'Risk Contributors Comparison',
+  threshold = 0.01
+}) {
+  // Load and execute SQL query
+  const fullSqlPath = sqlFilePath.startsWith('/')
+    ? sqlFilePath
+    : path.join(process.cwd(), 'queries', sqlFilePath);
+
+  let sqlQuery = fs.readFileSync(fullSqlPath, 'utf-8');
+  sqlQuery = sqlQuery.replace(/\{USER_ID\}/g, userId);
+
+  const dbResult = await dbClient.query(sqlQuery);
+
+  // Create a map of SQL data by name for easy lookup
+  const sqlMap = {};
+  dbResult.rows.forEach(row => {
+    sqlMap[row.name] = {
+      percentage: parseFloat(row.portfolio_percentage),
+      value: parseFloat(row.value),
+      level: row.level
+    };
+  });
+
+  const comparisons = [];
+  let allMatch = true;
+
+  // Compare each risk contributor from API
+  apiData.forEach((apiItem, index) => {
+    const name = apiItem.name;
+    const sqlItem = sqlMap[name];
+
+    if (!sqlItem) {
+      comparisons.push({
+        name,
+        status: '❌ Not found in SQL',
+        match: false,
+        apiPercentage: apiItem.percentage
+      });
+      allMatch = false;
+      return;
+    }
+
+    // Compare percentage with threshold
+    const apiPercentage = parseFloat(apiItem.percentage);
+    const sqlPercentage = sqlItem.percentage;
+    const diff = Math.abs(apiPercentage - sqlPercentage);
+    const match = diff <= threshold;
+
+    comparisons.push({
+      name,
+      apiPercentage: apiPercentage.toFixed(2),
+      sqlPercentage: sqlPercentage.toFixed(2),
+      diff: diff.toFixed(2),
+      match,
+      level: sqlItem.level,
+      status: match ? '✅' : '❌'
+    });
+
+    if (!match) {
+      allMatch = false;
+    }
+  });
+
+  // Build formatted report
+  let reportDetails = '';
+  comparisons.forEach((comp, index) => {
+    reportDetails += `\n${index + 1}. ${comp.name} (${comp.level || 'unknown'}):\n`;
+    if (comp.status === '❌ Not found in SQL') {
+      reportDetails += `   ${comp.status}\n`;
+      reportDetails += `   API Percentage: ${comp.apiPercentage}%\n`;
+    } else {
+      reportDetails += `   API: ${comp.apiPercentage}% | SQL: ${comp.sqlPercentage}% | Diff: ${comp.diff}% ${comp.status}\n`;
+    }
+  });
+
+  const formattedReport = `
+=== ${testName} ===
+Threshold:              ${threshold}%
+Total Contributors:     ${comparisons.length}
+All Values Match:       ${allMatch ? '✅ Yes' : '❌ No'}
+${reportDetails}
+`;
+
+  return {
+    match: allMatch,
+    comparisons,
+    formattedReport
+  };
+}

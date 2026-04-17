@@ -66,4 +66,28 @@ export const analysisEndpoints = {
 
   // Analysis Benchmark Comparison
   benchmarkComparison: (userId) => `/api/v1/analysis/performance/benchmark?member_user_id=${userId}`,
+
+  // Analysis Risk Contributors - All Assets
+  riskContributors: (userId) => `/api/v1/analysis/risk/contributors?member_user_id=${userId}`,
+
+  // Analysis Risk Contributors - Equity Only
+  equityRiskContributors: (userId) => {
+    const assetClassId = process.env.ASSET_CLASS_ID_EQUITY || '17';
+    const entityType = process.env.ENTITY_TYPE || 'asset';
+    return `/api/v1/analysis/risk/contributors?asset_class_id=${assetClassId}&entity_type=${entityType}&member_user_id=${userId}`;
+  },
+
+  // Analysis Risk Contributors - Mutual Funds Only
+  mfRiskContributors: (userId) => {
+    const assetClassId = process.env.ASSET_CLASS_ID_MUTUAL_FUNDS || '21';
+    const entityType = process.env.ENTITY_TYPE || 'asset';
+    return `/api/v1/analysis/risk/contributors?asset_class_id=${assetClassId}&entity_type=${entityType}&member_user_id=${userId}`;
+  },
+
+  // Analysis Risk Contributors - ETF Only
+  etfRiskContributors: (userId) => {
+    const assetClassId = process.env.ASSET_CLASS_ID_ETF || '18';
+    const entityType = process.env.ENTITY_TYPE || 'asset';
+    return `/api/v1/analysis/risk/contributors?asset_class_id=${assetClassId}&entity_type=${entityType}&member_user_id=${userId}`;
+  },
 };
