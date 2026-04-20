@@ -22,9 +22,6 @@ This is a **Playwright-based test automation framework** for the Crest fintech a
 3. **Holdings Count Tests** - Ensure correct count of holdings per asset type
 
 ### Key Metrics
-- **143 Total Tests** across 10 test files
-- **7 Asset Classes** covered (Equity, MF, ETF, Bank Deposits, RD, FD, NPS)
-- **8 Test Dates** (current day + 7 historical dates)
 - **0.25% Threshold** for value comparisons, **Exact Match** for counts
 
 ---
