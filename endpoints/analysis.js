@@ -90,4 +90,10 @@ export const analysisEndpoints = {
     const entityType = process.env.ENTITY_TYPE || 'asset';
     return `/api/v1/analysis/risk/contributors?asset_class_id=${assetClassId}&entity_type=${entityType}&member_user_id=${userId}`;
   },
+
+  // Analysis Asset Class Allocation
+  assetClassAllocation: (userId) => `/api/v1/analysis/allocation?category=asset_class&member_user_id=${userId}`,
+
+  // Analysis Geography Allocation
+  geographyAllocation: (userId) => `/api/v1/analysis/allocation?category=geography&member_user_id=${userId}`,
 };
