@@ -96,4 +96,7 @@ export const analysisEndpoints = {
 
   // Analysis Geography Allocation
   geographyAllocation: (userId) => `/api/v1/analysis/allocation?category=geography&member_user_id=${userId}`,
+
+  // Analysis Securities Overlap
+  securitiesOverlap: (userId) => `/api/v1/analysis/overlap/securities?member_user_id=${userId}`,
 };
