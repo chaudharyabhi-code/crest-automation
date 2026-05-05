@@ -97,6 +97,14 @@ export const analysisEndpoints = {
   // Analysis Geography Allocation
   geographyAllocation: (userId) => `/api/v1/analysis/allocation?category=geography&member_user_id=${userId}`,
 
+  // Analysis Key Metrics (for Beta, Alpha, Sharpe, Max Drawdown)
+ keyMetrics: (userId, fromDate = '', toDate = '') =>
+   `/api/v1/analysis/overview/key-metrics?from_date=${fromDate}&to_date=${toDate}&member_user_id=${userId}`,
+
+  // Analysis Risk Metrics (for Sortino, Volatility, etc.)
+  riskMetrics: (userId, assetClassId = '64', entityType = 'asset') =>
+    `/api/v1/analysis/risk/metrics?asset_class_id=${assetClassId}&entity_type=${entityType}&member_user_id=${userId}`,
+
   // Analysis Securities Overlap
   securitiesOverlap: (userId) => `/api/v1/analysis/overlap/securities?member_user_id=${userId}`,
 };
