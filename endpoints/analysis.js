@@ -105,4 +105,6 @@ export const analysisEndpoints = {
   riskMetrics: (userId, assetClassId = '64', entityType = 'asset') =>
     `/api/v1/analysis/risk/metrics?asset_class_id=${assetClassId}&entity_type=${entityType}&member_user_id=${userId}`,
 
+  // Analysis Securities Overlap
+  securitiesOverlap: (userId) => `/api/v1/analysis/overlap/securities?member_user_id=${userId}`,
 };
