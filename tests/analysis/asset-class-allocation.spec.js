@@ -33,7 +33,7 @@ test.describe('Asset Class Allocation Tests', () => {
     // 2. Get SQL results
     const sqlFilePath = path.join(process.cwd(), 'queries', 'asset_class-allocation-analysis.sql');
     let sqlQuery = fs.readFileSync(sqlFilePath, 'utf-8');
-    sqlQuery = sqlQuery.replace(/USER_ID/g, userId);
+    sqlQuery = sqlQuery.replace(/\{USER_ID\}/g, userId);
 
     const dbResult = await dbClient.query(sqlQuery);
     const sqlResults = dbResult.rows;
