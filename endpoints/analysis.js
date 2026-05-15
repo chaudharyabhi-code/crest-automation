@@ -56,6 +56,27 @@ export const analysisEndpoints = {
     return `/api/v1/analysis/holdings?member_user_id=${userId}&asset_class_id=${assetClassId}&entity_type=${entityType}`;
   },
 
+  // Analysis Holdings Count with Gold filter
+  goldHoldingsCount: (userId) => {
+    const assetClassId = process.env.ASSET_CLASS_ID_GOLD || '20';
+    const entityType = process.env.ENTITY_TYPE || 'asset';
+    return `/api/v1/analysis/holdings?member_user_id=${userId}&asset_class_id=${assetClassId}&entity_type=${entityType}`;
+  },
+
+  // Analysis Holdings Count with Real Estate filter
+  realEstateHoldingsCount: (userId) => {
+    const assetClassId = process.env.ASSET_CLASS_ID_REAL_ESTATE || '13';
+    const entityType = process.env.ENTITY_TYPE || 'asset';
+    return `/api/v1/analysis/holdings?member_user_id=${userId}&asset_class_id=${assetClassId}&entity_type=${entityType}`;
+  },
+
+  // Analysis Holdings Count with Crypto filter
+  cryptoHoldingsCount: (userId) => {
+    const assetClassId = process.env.ASSET_CLASS_ID_CRYPTO || '19';
+    const entityType = process.env.ENTITY_TYPE || 'asset';
+    return `/api/v1/analysis/holdings?member_user_id=${userId}&asset_class_id=${assetClassId}&entity_type=${entityType}`;
+  },
+
   // Analysis Recent Dividends
   recentDividends: (userId, fromDate, toDate) => {
     let url = `/api/v1/analysis/overview/dividends/?member_user_id=${userId}`;
