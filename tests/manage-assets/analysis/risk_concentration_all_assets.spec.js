@@ -1,10 +1,10 @@
-import { test, expect } from '../../fixtures/fixtures.js';
-import { dbClient } from '../../utils/db/dbClient.js';
-import { analysisEndpoints } from '../../endpoints/index.js';
+import { test, expect } from '../../../fixtures/fixtures.js';
+import { dbClient } from '../../../utils/db/dbClient.js';
+import { analysisEndpoints } from '../../../endpoints/index.js';
 import fs from 'fs';
 import path from 'path';
 
-test.describe('Analysis Risk and Concentration Tests', () => {
+test.describe('Manage Assets - Risk & Concentration All Assets (with Manual Assets)', () => {
 
   test.beforeAll(async () => {
     await dbClient.init();
@@ -14,20 +14,20 @@ test.describe('Analysis Risk and Concentration Tests', () => {
     await dbClient.close();
   });
 
-  test('Risk Contributors Comparison - API vs SQL', async ({ apiClient }) => {
+  test('Risk Contributors Comparison - API vs Combined SQL (automated + manual)', async ({ apiClient }) => {
     const userId = process.env.USER_ID;
     const threshold = parseFloat(process.env.COMPARISON_THRESHOLD_PCT || '0.25');
 
-    console.log('\n=== Risk Contributors Comparison (All Assets) ===');
+    console.log('\n=== Risk & Concentration All Assets (with Manual Assets) ===');
 
     // 1. Call API
     const response = await apiClient.get(analysisEndpoints.riskContributors(userId));
     const apiData = response.body?.data?.top_assets || [];
     console.log(`API returned ${apiData.length} risk contributors`);
 
-    // 2. Run SQL
+    // 2. Run combined SQL (automated + manual assets)
     const sqlQuery = fs.readFileSync(
-      path.join(process.cwd(), 'queries', 'risk_and_concentration_allassets.sql'),
+      path.join(process.cwd(), 'queries', 'manage-assets', 'risk_concentration-all-assets.sql'),
       'utf-8'
     ).replace(/{USER_ID}/g, userId);
 
@@ -37,7 +37,7 @@ test.describe('Analysis Risk and Concentration Tests', () => {
       percentage: parseFloat(r.percentage) || 0,
       asset_type: r.asset_type
     }));
-    console.log(`DB returned ${dbRows.length} risk contributors`);
+    console.log(`DB returned ${dbRows.length} risk contributors (incl. manual assets)`);
 
     // 3. Compare
     const dbMap = {};
@@ -80,10 +80,10 @@ test.describe('Analysis Risk and Concentration Tests', () => {
 
     // 4. Build report
     let report = `
-=== Risk Contributors Comparison (All Assets) ===
+=== Risk & Concentration All Assets (with Manual Assets) ===
 
 API Contributors: ${apiData.length}
-DB Contributors:  ${dbRows.length}
+DB Contributors (incl. manual): ${dbRows.length}
 Threshold: ${threshold}%
 
 === Comparison ===\n`;
@@ -102,12 +102,12 @@ Threshold: ${threshold}%
 
     console.log(report);
 
-    test.info().attach('risk-contributors-comparison.txt', {
+    test.info().attach('risk-concentration-all-assets-manual.txt', {
       body: report,
       contentType: 'text/plain'
     });
 
-    test.info().attach('risk-contributors-details.json', {
+    test.info().attach('risk-concentration-all-assets-manual.json', {
       body: JSON.stringify({ userId, apiData, dbRows, comparisons, summary: { apiCount: apiData.length, dbCount: dbRows.length, allPassed } }, null, 2),
       contentType: 'application/json'
     });
