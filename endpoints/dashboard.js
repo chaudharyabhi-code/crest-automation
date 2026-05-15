@@ -172,12 +172,12 @@ export const dashboardEndpoints = {
 
   // Gold Filter Endpoints
   goldAssetAllocation: (userId, date) => {
-    const assetClassId = process.env.ASSET_CLASS_ID_GOLD || '23';
+    const assetClassId = process.env.ASSET_CLASS_ID_GOLD || '20';
     const entityType = process.env.ENTITY_TYPE || 'asset';
     return `/api/v1/dashboard/asset-allocation?member_user_id=${userId}&asset_class_id=${assetClassId}&entity_type=${entityType}&from_date=${date}&to_date=${date}`;
   },
   goldPerformanceChart: (userId, date) => {
-    const assetClassId = process.env.ASSET_CLASS_ID_GOLD || '23';
+    const assetClassId = process.env.ASSET_CLASS_ID_GOLD || '20';
     const entityType = process.env.ENTITY_TYPE || 'asset';
     return `/api/v1/dashboard/performance-chart?member_user_id=${userId}&asset_class_id=${assetClassId}&entity_type=${entityType}&from_date=${date}&to_date=${date}`;
   },
