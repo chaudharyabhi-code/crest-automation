@@ -1,4 +1,12 @@
-WITH manual_rd AS (
+WITH automated_rd AS (
+    SELECT
+        COALESCE(rd.fip_name, 'Recurring Deposit') AS name,
+        COALESCE(rd.account_current_value, 0)       AS value
+    FROM recurring_deposits rd
+    WHERE rd.user_id = {USER_ID}
+      AND rd.account_current_value > 0
+),
+manual_rd AS (
     SELECT
         ua.user_asset_name AS name,
         CASE
@@ -12,18 +20,25 @@ WITH manual_rd AS (
             )
         END AS value
     FROM user_assets ua
-    LEFT JOIN asset_classes ac ON ua.asset_class_id = ac.id
+    JOIN asset_classes ac ON ua.asset_class_id = ac.id
     WHERE ua.user_id = {USER_ID}
       AND ua.deleted_at IS NULL
-      AND ua.is_manual_entry = true
+      AND ua.is_manual_entry = TRUE
       AND ac.type = 'recurring'
 ),
-grand_total AS (SELECT SUM(value) AS total FROM manual_rd WHERE value > 0)
+all_rd AS (
+    SELECT name, value FROM automated_rd
+    UNION ALL
+    SELECT name, value FROM manual_rd WHERE value > 0
+),
+grand_total AS (
+    SELECT SUM(value) AS total FROM all_rd
+)
 SELECT
     name,
---    ROUND(value::numeric, 2) AS value,
     ROUND((value / NULLIF(gt.total, 0) * 100)::numeric, 2) AS percentage
-FROM manual_rd CROSS JOIN grand_total gt
+FROM all_rd
+CROSS JOIN grand_total gt
 WHERE value > 0
 ORDER BY percentage DESC
 LIMIT 5;

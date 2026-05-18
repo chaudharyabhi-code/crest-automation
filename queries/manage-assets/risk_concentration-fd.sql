@@ -1,4 +1,12 @@
-WITH manual_fd AS (
+WITH automated_fd AS (
+    SELECT
+        COALESCE(td.fip_name, 'Fixed Deposit') AS name,
+        COALESCE(td.account_current_balance, 0)  AS value
+    FROM term_deposits td
+    WHERE td.user_id = {USER_ID}
+      AND td.account_current_balance > 0
+),
+manual_fd AS (
     SELECT
         ua.user_asset_name AS name,
         CASE
@@ -12,18 +20,25 @@ WITH manual_fd AS (
             )
         END AS value
     FROM user_assets ua
-    LEFT JOIN asset_classes ac ON ua.asset_class_id = ac.id
+    JOIN asset_classes ac ON ua.asset_class_id = ac.id
     WHERE ua.user_id = {USER_ID}
       AND ua.deleted_at IS NULL
-      AND ua.is_manual_entry = true
+      AND ua.is_manual_entry = TRUE
       AND ac.type = 'term'
 ),
-grand_total AS (SELECT SUM(value) AS total FROM manual_fd WHERE value > 0)
+all_fd AS (
+    SELECT name, value FROM automated_fd
+    UNION ALL
+    SELECT name, value FROM manual_fd WHERE value > 0
+),
+grand_total AS (
+    SELECT SUM(value) AS total FROM all_fd
+)
 SELECT
     name,
---    ROUND(value::numeric, 2) AS value,
     ROUND((value / NULLIF(gt.total, 0) * 100)::numeric, 2) AS percentage
-FROM manual_fd CROSS JOIN grand_total gt
+FROM all_fd
+CROSS JOIN grand_total gt
 WHERE value > 0
 ORDER BY percentage DESC
 LIMIT 5;
