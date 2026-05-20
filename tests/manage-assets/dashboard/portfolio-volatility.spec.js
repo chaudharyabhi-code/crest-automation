@@ -1,7 +1,7 @@
-import { test, expect } from '../../fixtures/fixtures.js';
-import { dbClient } from '../../utils/db/dbClient.js';
-import { compareApiWithSql, extractApiValue } from '../../utils/testHelpers.js';
-import { dashboardEndpoints } from '../../endpoints/index.js';
+import { test, expect } from '../../../fixtures/fixtures.js';
+import { dbClient } from '../../../utils/db/dbClient.js';
+import { compareApiWithSql, extractApiValue } from '../../../utils/testHelpers.js';
+import { dashboardEndpoints } from '../../../endpoints/index.js';
 
 test.describe('Portfolio Volatility Tests', () => {
 

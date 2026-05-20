@@ -267,12 +267,6 @@ Crest Automation Playwright/
 - **Returns**: `true` if all dates are valid, `false` if any future dates found
 - **Used by**: Test setup to warn about invalid dates
 
-**Function: `createHistoricalSummaryReport(testName, results)`**
-- **Purpose**: Generate formatted summary for multiple date tests
-- **Input**: Array of test results with `{date, passed, diffPct, error}`
-- **Output**: Formatted report string with statistics
-- **Used by**: Summary tests
-
 ---
 
 ### 5. Database Functions

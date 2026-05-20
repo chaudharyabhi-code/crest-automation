@@ -2,7 +2,7 @@ import { test, expect } from '../../fixtures/fixtures.js';
 import { dbClient } from '../../utils/db/dbClient.js';
 import { compareApiWithSql, extractApiValue } from '../../utils/testHelpers.js';
 import { dashboardEndpoints } from '../../endpoints/index.js';
-import { getHistoricalDates, createHistoricalSummaryReport, validateHistoricalDates } from '../../utils/historicalDateHelper.js';
+import { getHistoricalDates, validateHistoricalDates } from '../../utils/historicalDateHelper.js';
 import { extractUnitAndValue } from '../../utils/comparison.js';
 
 test.describe('Historical Asset Allocation Verification Tests', () => {
@@ -167,98 +167,5 @@ test.describe('Historical Asset Allocation Verification Tests', () => {
     });
   });
 
-  // Summary test to validate all dates at once
-  test('Historical Asset Allocation Summary - All Dates', async ({ apiClient }) => {
-    const userId = process.env.USER_ID;
-    const dates = getHistoricalDates();
-    const results = [];
-    let allPassed = true;
 
-    console.log('\n=== Historical Asset Allocation Summary Test ===');
-    console.log(`Testing ${dates.length} historical dates: ${dates.join(', ')}`);
-
-    for (const testDate of dates) {
-      try {
-        // Call API for this date
-        const response = await apiClient.get(
-          dashboardEndpoints.historicalAssetAllocation(userId, testDate)
-        );
-
-        // Sum all assets from API response
-        let totalApiWealth = 0;
-
-        if (Array.isArray(response.body?.data)) {
-          // Direct array in data
-          response.body.data.forEach(asset => {
-            const amount = parseFloat(asset.amount) || 0;
-            const unit = asset.unit || '';
-
-            let rupeeValue = amount;
-            if (unit) {
-              const multipliers = { 'Cr': 10000000, 'L': 100000, 'K': 1000 };
-              rupeeValue = amount * (multipliers[unit] || 1);
-            }
-
-            totalApiWealth += rupeeValue;
-          });
-        } else if (response.body?.data?.allocation && Array.isArray(response.body.data.allocation)) {
-          response.body.data.allocation.forEach(asset => {
-            const assetValue = asset.value || asset.amount || asset.current_value || '0';
-            const { value, unit } = extractUnitAndValue(assetValue);
-
-            let rupeeValue = value;
-            if (unit) {
-              const multipliers = { 'Cr': 10000000, 'L': 100000, 'K': 1000 };
-              rupeeValue = value * (multipliers[unit] || 1);
-            }
-
-            totalApiWealth += rupeeValue;
-          });
-        }
-
-        // Compare with SQL
-        const result = await compareApiWithSql({
-          apiValue: totalApiWealth.toString(),
-          sqlFilePath: 'historical_allocation_test.sql',
-          userId: userId,
-          sqlColumn: 'grand_total',
-          testName: `Date: ${testDate}`,
-          endDate: testDate  // Pass the historical date for SQL replacement
-        });
-
-        results.push({
-          date: testDate,
-          passed: result.comparison.pass,
-          diffPct: result.comparison.diffPct,
-          apiValue: result.apiValue,
-          dbValue: result.dbRoundedFormatted
-        });
-
-        if (!result.comparison.pass) {
-          allPassed = false;
-        }
-
-      } catch (error) {
-        results.push({
-          date: testDate,
-          passed: false,
-          error: error.message
-        });
-        allPassed = false;
-      }
-    }
-
-    // Create summary report using the helper function
-    const summaryReport = createHistoricalSummaryReport('Historical Asset Allocation', results);
-    console.log(summaryReport);
-
-    // Attach summary to test report
-    test.info().attach('historical-summary.txt', {
-      body: summaryReport,
-      contentType: 'text/plain'
-    });
-
-    // Assert all dates passed
-    expect(allPassed).toBe(true);
-  });
 });

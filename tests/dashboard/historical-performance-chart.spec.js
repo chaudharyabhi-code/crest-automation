@@ -2,7 +2,7 @@ import { test, expect } from '../../fixtures/fixtures.js';
 import { dbClient } from '../../utils/db/dbClient.js';
 import { compareApiWithSql, extractApiValue } from '../../utils/testHelpers.js';
 import { dashboardEndpoints } from '../../endpoints/index.js';
-import { getHistoricalDates, createHistoricalSummaryReport, validateHistoricalDates } from '../../utils/historicalDateHelper.js';
+import { getHistoricalDates, validateHistoricalDates } from '../../utils/historicalDateHelper.js';
 import { extractUnitAndValue } from '../../utils/comparison.js';
 
 test.describe('Historical Performance Chart Verification Tests', () => {
@@ -190,98 +190,5 @@ test.describe('Historical Performance Chart Verification Tests', () => {
     });
   });
 
-  // Summary test to validate all dates at once
-  test('Historical Performance Chart Summary - All Dates', async ({ apiClient }) => {
-    const userId = process.env.USER_ID;
-    const dates = getHistoricalDates();
-    const results = [];
-    let allPassed = true;
-
-    console.log('\n=== Historical Performance Chart Summary Test ===');
-    console.log(`Testing ${dates.length} historical dates: ${dates.join(', ')}`);
-
-    for (const testDate of dates) {
-      try {
-        // Call API for this date
-        const response = await apiClient.get(
-          dashboardEndpoints.historicalPerformanceChart(userId, testDate)
-        );
-
-        // Extract value using the same logic as individual tests
-        let apiValue = 0;
-
-        // Check if data is directly an array
-        if (Array.isArray(response.body?.data) && response.body.data.length > 0) {
-          const lastPoint = response.body.data[response.body.data.length - 1];
-          if (lastPoint) {
-            const totalValue = parseFloat(lastPoint.total) || 0;
-            const unit = lastPoint.unit || '';
-
-            // Convert to base rupee value
-            let rupeeValue = totalValue;
-            if (unit) {
-              const multipliers = { 'Cr': 10000000, 'L': 100000, 'K': 1000 };
-              rupeeValue = totalValue * (multipliers[unit] || 1);
-            }
-            apiValue = rupeeValue;
-          }
-        } else if (response.body?.data?.chart_data && Array.isArray(response.body.data.chart_data)) {
-          const lastPoint = response.body.data.chart_data[response.body.data.chart_data.length - 1];
-          apiValue = lastPoint?.total_wealth || lastPoint?.value || lastPoint?.y || 0;
-        }
-
-        // Fallback to other structures
-        if (!apiValue) {
-          apiValue = response.body?.data?.total ||
-                    response.body?.data?.total_wealth ||
-                    response.body?.data?.performance?.total_wealth ||
-                    0;
-        }
-
-        // Compare with SQL using historical_allocation_test.sql
-        const result = await compareApiWithSql({
-          apiValue: apiValue.toString(),
-          sqlFilePath: 'historical_allocation_test.sql',
-          userId: userId,
-          sqlColumn: 'grand_total',
-          testName: `Date: ${testDate}`,
-          endDate: testDate  // Pass the historical date for SQL replacement
-        });
-
-        results.push({
-          date: testDate,
-          passed: result.comparison.pass,
-          diffPct: result.comparison.diffPct,
-          apiValue: result.apiValue,
-          dbValue: result.dbRoundedFormatted
-        });
-
-        if (!result.comparison.pass) {
-          allPassed = false;
-        }
-
-      } catch (error) {
-        results.push({
-          date: testDate,
-          passed: false,
-          error: error.message
-        });
-        allPassed = false;
-      }
-    }
-
-    // Create summary report using the helper function
-    const summaryReport = createHistoricalSummaryReport('Historical Performance Chart', results);
-    console.log(summaryReport);
-
-    // Attach summary to test report
-    test.info().attach('historical-performance-summary.txt', {
-      body: summaryReport,
-      contentType: 'text/plain'
-    });
-
-    // Assert all dates passed
-    expect(allPassed).toBe(true);
-  });
 
 });
