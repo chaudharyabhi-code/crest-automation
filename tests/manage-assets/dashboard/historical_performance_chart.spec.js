@@ -3,7 +3,7 @@ import path from 'path';
 import { test, expect } from '../../../fixtures/fixtures.js';
 import { dbClient } from '../../../utils/db/dbClient.js';
 import { dashboardEndpoints } from '../../../endpoints/index.js';
-import { getHistoricalDates, createHistoricalSummaryReport, validateHistoricalDates } from '../../../utils/historicalDateHelper.js';
+import { getHistoricalDates, validateHistoricalDates } from '../../../utils/historicalDateHelper.js';
 import { compareValues } from '../../../utils/comparison.js';
 
 const UNIT_MULTIPLIERS = { 'Cr': 10000000, 'L': 100000, 'K': 1000 };
@@ -132,54 +132,5 @@ Result:                     ${comparison.message}
     });
   });
 
-  test('Historical Performance Chart Summary (with Manual Assets) - All Dates', async ({ apiClient }) => {
-    const userId = process.env.USER_ID;
-    const dates = getHistoricalDates();
-    const results = [];
-    let allPassed = true;
 
-    console.log('\n=== Historical Performance Chart (with Manual Assets) Summary ===');
-    console.log(`Testing ${dates.length} dates: ${dates.join(', ')}`);
-
-    for (const testDate of dates) {
-      try {
-        const response = await apiClient.get(
-          dashboardEndpoints.historicalPerformanceChart(userId, testDate)
-        );
-        const { apiTotal } = extractApiTotalFromChart(response.body);
-
-        const grandTotal = await getGrandTotal(userId, testDate);
-        const manualTotal = await getManualAssetsTotal(userId, testDate);
-        const combinedTotal = grandTotal + manualTotal;
-
-        const comparison = compareValues((apiTotal || 0).toString(), combinedTotal, threshold);
-
-        results.push({
-          date: testDate,
-          passed: comparison.pass,
-          diffPct: comparison.diffPct,
-          apiValue: apiTotal,
-          dbValue: `${grandTotal} + ${manualTotal} = ${combinedTotal}`
-        });
-
-        if (!comparison.pass) allPassed = false;
-      } catch (error) {
-        results.push({ date: testDate, passed: false, error: error.message });
-        allPassed = false;
-      }
-    }
-
-    const summaryReport = createHistoricalSummaryReport(
-      'Historical Performance Chart (with Manual Assets)',
-      results
-    );
-    console.log(summaryReport);
-
-    test.info().attach('historical-performance-manual-summary.txt', {
-      body: summaryReport,
-      contentType: 'text/plain'
-    });
-
-    expect(allPassed).toBe(true);
-  });
 });

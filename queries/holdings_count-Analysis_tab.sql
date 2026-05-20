@@ -26,6 +26,7 @@ raw_holdings AS (
         COALESCE(invested_value, cost_basis) AS cost_basis
     FROM mf CROSS JOIN params
     WHERE user_id = params.target_user_id
+    and current_value !=0
     UNION ALL
     -- 3. Broker-linked ETFs
     SELECT 

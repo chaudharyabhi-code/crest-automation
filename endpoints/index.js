@@ -5,6 +5,8 @@
 
 export { dashboardEndpoints } from './dashboard.js';
 export { analysisEndpoints } from './analysis.js';
+export { familyDashboardEndpoints } from './familyDashboardEndpoints.js';
+export { familyAnalysisEndpoints } from './familyAnalysisEndpoints.js';
 
 // Add more endpoint categories as needed:
 // export { authEndpoints } from './auth.js';

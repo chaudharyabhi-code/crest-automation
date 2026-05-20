@@ -96,41 +96,6 @@ export function replaceDateInSQL(sqlQuery, date) {
   return sqlQuery.replace(/{END_DATE}/g, date);
 }
 
-/**
- * Create a summary report for multiple date tests
- * @param {Array} results - Array of test results
- * @returns {string} Formatted summary report
- */
-export function createHistoricalSummaryReport(testName, results) {
-  const passed = results.filter(r => r.passed).length;
-  const failed = results.filter(r => !r.passed).length;
-  const totalTests = results.length;
-
-  return `
-=== ${testName} Summary ===
-Total Dates Tested: ${totalTests}
-Passed: ${passed} (${((passed/totalTests) * 100).toFixed(1)}%)
-Failed: ${failed} (${((failed/totalTests) * 100).toFixed(1)}%)
-
-Detailed Results:
-${results.map(r => {
-  const status = r.passed ? '✅ PASS' : '❌ FAIL';
-  let details = `  Date: ${r.date} - ${status}`;
-
-  if (r.error) {
-    details += `\n    Error: ${r.error}`;
-  } else {
-    details += `\n    API Value: ${r.apiValue || 'N/A'}`;
-    details += `\n    DB Value: ${r.dbValue || 'N/A'}`;
-    details += `\n    Difference: ${r.diffPct ? r.diffPct.toFixed(2) + '%' : 'N/A'}`;
-  }
-
-  return details;
-}).join('\n\n')}
-
-${failed > 0 ? '⚠️ Some tests failed. Please review the differences above.' : '✅ All tests passed successfully!'}
-`;
-}
 
 /**
  * Validate if historical dates are in the past
