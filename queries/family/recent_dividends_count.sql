@@ -1,8 +1,5 @@
 
-WITH parameters AS (
-    SELECT {FAMILY_ID}::integer AS user_id
-),
-temp as (
+WITH temp as (
 SELECT
     ud.company_name AS name,
     ROUND(ud.dividend_rate::numeric, 2) AS rate,
@@ -11,8 +8,7 @@ SELECT
     ud.payment_date AS "paymentDate",
     ud.currency
 FROM user_dividends ud
-CROSS JOIN parameters p
-WHERE ud.user_id = p.user_id
+WHERE ud.user_id IN (SELECT user_id FROM family_members WHERE family_id = {FAMILY_ID} AND is_invitation_accepted = true)
   AND (
     (ud.payment_date IS NOT NULL
      AND ud.payment_date <= CURRENT_DATE

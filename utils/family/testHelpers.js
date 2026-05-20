@@ -498,7 +498,7 @@ export async function compareRiskContributors({
     : path.join(process.cwd(), 'queries', sqlFilePath);
 
   let sqlQuery = fs.readFileSync(fullSqlPath, 'utf-8');
-  sqlQuery = sqlQuery.replace(/\{FAMILY_ID\}/g, userId);
+  sqlQuery = sqlQuery.replace(/\{FAMILY_ID\}/g, familyId || userId);
 
   const dbResult = await dbClient.query(sqlQuery);
 

@@ -75,7 +75,7 @@ deposits_balances AS (
 -- ============================================================================
 recurring_balances AS (
     SELECT
-        'Tecurring' AS asset_class,
+        'Recurring Deposits' AS asset_class,
         'Recurring Deposits' AS display_name,
         COALESCE(SUM(rd.account_current_value), 0) +
         COALESCE((SELECT manual_balance FROM manual_assets_by_type WHERE asset_class_type = 'recurring'), 0) AS balance

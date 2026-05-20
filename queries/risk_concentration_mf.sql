@@ -6,7 +6,7 @@ user_mf AS (
         mf.fund_name,
         mf.current_value
     FROM mf
-    WHERE mf.user_id = 1122
+    WHERE mf.user_id = {USER_ID}
       AND mf.deleted_at IS NULL
       AND mf.current_value > 0
     ORDER BY mf.user_id, mf.isin, mf.updated_at DESC
@@ -113,7 +113,7 @@ SELECT * FROM (
             name,
 --            sector,
 --            ROUND(value::numeric, 2)       AS value,
-            pct                            AS percentage
+            pct                            AS portfolio_percentage
 --            ROUND(grand_total::numeric, 2) AS grand_total
         FROM all_items
         WHERE asset_type = 'STOCK' AND pct > 10
@@ -129,7 +129,7 @@ SELECT * FROM (
             name,
 --            sector,
 --            ROUND(value::numeric, 2)       AS value,
-            pct                            AS percentage
+            pct                            AS portfolio_percentage
 --            ROUND(grand_total::numeric, 2) AS grand_total
         FROM all_items
         WHERE asset_type = 'SECTOR' AND pct > 15
