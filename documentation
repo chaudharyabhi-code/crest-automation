@@ -1,0 +1,980 @@
+# CREST Automation Framework — Technical Documentation
+
+> **Version:** 1.0.0  
+> **Framework:** Playwright + PostgreSQL  
+> **Language:** JavaScript (ES6 Modules)  
+> **Scope:** API vs Database Validation Automation
+
+---
+
+## Table of Contents
+
+1. [Project Overview](#1-project-overview)
+2. [Tech Stack](#2-tech-stack)
+3. [Folder Structure](#3-folder-structure)
+4. [Framework Execution Flow](#4-framework-execution-flow)
+5. [Validation Logic](#5-validation-logic)
+6. [Environment & Configuration](#6-environment--configuration)
+7. [Reporting](#7-reporting)
+8. [How to Execute Tests](#8-how-to-execute-tests)
+9. [Utilities & Reusable Components](#9-utilities--reusable-components)
+10. [Best Practices Used](#10-best-practices-used)
+11. [Suggestions & Improvements](#11-suggestions--improvements)
+
+---
+
+## 1. Project Overview
+
+### What This Project Does
+
+CREST Automation is an **API vs Database validation framework** that verifies the correctness of a financial portfolio management application. It does this by making live API calls and independently querying the PostgreSQL database, then comparing results to ensure they match within defined thresholds.
+
+### Business Purpose
+
+In a financial application, even minor discrepancies between the data the backend computes and what the API serves to the frontend can lead to incorrect portfolio valuations, misleading analytics, and loss of user trust. This framework automates the detection of such discrepancies across:
+
+- **Portfolio wealth summaries** (Total Wealth, Asset Allocation, Cash & Equivalent)
+- **Holdings counts** (Equity, MF, ETF, NPS, FD, RD, Bank Deposits)
+- **Historical performance** (at multiple past dates)
+- **Risk analysis** (Risk Concentration, Contributors, Geography Allocation)
+- **Family aggregation** (consolidated view across all family members)
+- **Manage-assets** (including manually added assets)
+
+### Why API vs DB Validation Matters
+
+| Risk Without Validation | What This Framework Catches |
+|---|---|
+| Backend bug silently returns wrong total | Grand total mismatch > 0.25% threshold |
+| New asset class missing from aggregation | Holdings count mismatch (exact match) |
+| Family ID treated as User ID in SQL | Incorrect 0 values returned |
+| Historical snapshot returning live data | Date-filtered SQL vs date-parameterized API |
+| Unit conversion errors (Cr/L/K) | Pre-normalized comparison logic |
+
+### High-Level Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                  CREST Automation Framework             │
+│                                                         │
+│  ┌──────────────┐    ┌──────────────┐                  │
+│  │  Playwright  │    │  PostgreSQL  │                  │
+│  │  API Client  │    │  DB Client   │                  │
+│  └──────┬───────┘    └──────┬───────┘                  │
+│         │                   │                           │
+│         ▼                   ▼                           │
+│  ┌──────────────────────────────────┐                  │
+│  │         Comparison Engine        │                  │
+│  │  (threshold / exact / unit-aware)│                  │
+│  └──────────────────┬───────────────┘                  │
+│                     ▼                                   │
+│  ┌──────────────────────────────────┐                  │
+│  │       Playwright HTML Report     │                  │
+│  │  + Text Attachments per test     │                  │
+│  └──────────────────────────────────┘                  │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 2. Tech Stack
+
+| Component | Technology | Version | Purpose |
+|---|---|---|---|
+| Test Framework | `@playwright/test` | ^1.59.1 | Test runner, fixtures, reporting |
+| Language | JavaScript (ESM) | Node.js | ES6 modules throughout |
+| HTTP Client | Playwright Request API | Built-in | Authenticated API calls |
+| Database Client | `pg` (node-postgres) | ^8.12.0 | PostgreSQL connection pool |
+| Environment Vars | `dotenv` | ^16.4.5 | Load `.env` configuration |
+| Assertion Library | Playwright `expect` | Built-in | Test assertions |
+| Reporting | Playwright HTML Reporter | Built-in | HTML + attachment reports |
+| Browser | Chromium | Playwright-managed | API tests (headless) |
+
+> **Note:** Although Playwright is traditionally a browser automation tool, this project uses it exclusively for its test runner, fixture system, and reporting capabilities. All tests are purely API + SQL — no UI interaction occurs.
+
+---
+
+## 3. Folder Structure
+
+```
+crest-automation/
+│
+├── auth/                          → Authentication layer
+│   ├── auth.js                    → Signup + OTP verification logic
+│   ├── auth.setup.js              → Global setup — runs ONCE before all tests
+│   └── apiClient.js               → HTTP client with Bearer token header
+│
+├── .auth/                         → Auto-generated auth artifacts
+│   └── token.json                 → Persisted access token for test use
+│
+├── endpoints/                     → API endpoint registry
+│   ├── index.js                   → Central export for all endpoint modules
+│   ├── dashboard.js               → Individual user dashboard endpoints (~30)
+│   ├── analysis.js                → Individual user analysis endpoints (~15)
+│   ├── familyDashboardEndpoints.js → Family dashboard endpoints (mirrors dashboard.js)
+│   └── familyAnalysisEndpoints.js  → Family analysis endpoints (mirrors analysis.js)
+│
+├── fixtures/
+│   └── fixtures.js                → Extends Playwright test with apiClient fixture
+│
+├── utils/                         → Shared utilities and helpers
+│   ├── testHelpers.js             → Core comparison helpers (individual users)
+│   ├── comparison.js              → Unit conversion + value comparison engine
+│   ├── historicalDateHelper.js    → Historical date parsing and validation
+│   └── db/
+│       └── dbClient.js            → PostgreSQL connection pool (singleton)
+│
+├── utils/family/                  → Family-scoped helper overrides
+│   └── testHelpers.js             → compareApiWithSql, compareHoldingsCount,
+│                                     compareRiskContributors etc. for FAMILY_ID
+│
+├── queries/                       → SQL query files (individual user scope)
+│   ├── total_wealth_test.sql
+│   ├── holdings_count-Analysis_tab.sql
+│   ├── asset_class-allocation-analysis.sql
+│   ├── historical_allocation_test.sql
+│   ├── portfolio_volatility_test.sql
+│   ├── cash-and-equivalent.sql
+│   ├── risk_concentration_equity.sql
+│   ├── risk_concentration_mf.sql
+│   ├── risk_concentration_etf.sql
+│   ├── risk_and_concentration_allassets.sql
+│   ├── geography-allocation-analysis.sql
+│   ├── top_current_holdings.sql
+│   ├── benchmark_comparison.sql
+│   ├── recent_dividends_count.sql
+│   ├── recent_dividends.sql
+│   ├── security_overlap_count.sql
+│   ├── security_overlap_names_match.sql
+│   └── [30+ additional SQL files]
+│
+├── queries/family/                → SQL query files (family aggregation scope)
+│   ├── total_wealth_test.sql      → Queries family_members → aggregates all users
+│   ├── holdings_count-Analysis_tab.sql
+│   ├── asset_class-allocation-analysis.sql
+│   ├── risk_concentration_equity.sql
+│   ├── risk_concentration_mf.sql
+│   ├── risk_concentration_etf.sql
+│   ├── geography-allocation-analysis.sql
+│   ├── security_overlap_count.sql
+│   ├── recent_dividends_count.sql
+│   └── [20+ additional SQL files]
+│
+├── queries/manage-assets/         → SQL files for manual + automated assets
+│   └── [SQL files including user_assets table]
+│
+├── tests/                         → All test spec files
+│   │
+│   ├── dashboard/                 → Individual user dashboard tests
+│   │   ├── portfolio-summary.spec.js
+│   │   ├── asset-allocation.spec.js
+│   │   ├── cash-and-equivalent.spec.js
+│   │   ├── portfolio-volatility.spec.js
+│   │   ├── top-current-holdings.spec.js
+│   │   ├── holdings-count.spec.js
+│   │   ├── idle-cash-optimization.spec.js
+│   │   ├── historical-asset-allocation.spec.js
+│   │   ├── historical-performance-chart.spec.js
+│   │   └── [asset class filter specs ×9]
+│   │
+│   ├── analysis/                  → Individual user analysis tests
+│   │   ├── holdings-count.spec.js
+│   │   ├── asset-class-allocation.spec.js
+│   │   ├── geography-allocation.spec.js
+│   │   ├── risk-contributors.spec.js
+│   │   ├── risk-contributors-equity.spec.js
+│   │   ├── risk-contributors-mf.spec.js
+│   │   ├── risk-contributors-etf.spec.js
+│   │   ├── benchmark-comparison.spec.js
+│   │   ├── dividends-count.spec.js
+│   │   ├── security-overlap-count.spec.js
+│   │   └── security-overlap-names-match.spec.js
+│   │
+│   ├── family/
+│   │   ├── dashboard/             → Family dashboard tests (mirrors tests/dashboard/)
+│   │   └── analysis/              → Family analysis tests (mirrors tests/analysis/)
+│   │
+│   └── manage-assets/
+│       ├── dashboard/             → Manage-assets dashboard tests (18 files)
+│       └── analysis/              → Manage-assets analysis tests
+│
+├── playwright-report/             → Generated HTML reports
+│   └── index.html                 → Open in browser after test run
+│
+├── test-results/                  → Raw test artifacts
+│   └── .last-run.json
+│
+├── playwright.config.js           → Playwright configuration
+├── package.json                   → Dependencies and npm scripts
+├── .env                           → Live environment config (not committed)
+├── .env.example                   → Template with all required variables
+└── DOCUMENTATION.md               → This file
+```
+
+**File Counts:**
+
+| Category | Count |
+|---|---|
+| Test spec files | 85+ |
+| SQL query files | 140+ |
+| Utility/helper files | 8 |
+| Endpoint definition files | 4 |
+
+---
+
+## 4. Framework Execution Flow
+
+### Complete Lifecycle
+
+```
+npx playwright test [path]
+        │
+        ▼
+┌─────────────────────────────┐
+│  1. Load playwright.config  │  ← reads .env, sets baseURL, workers=1
+└──────────────┬──────────────┘
+               │
+               ▼
+┌─────────────────────────────┐
+│  2. Global Setup            │  ← auth/auth.setup.js — runs ONCE
+│     ├─ POST /auth/v1/signup │
+│     ├─ POST /auth/v1/verify-otp
+│     └─ Save token.json      │
+└──────────────┬──────────────┘
+               │
+               ▼
+┌─────────────────────────────┐
+│  3. For each describe block │
+│     └─ beforeAll()          │  ← dbClient.init() — PostgreSQL pool
+└──────────────┬──────────────┘
+               │
+               ▼
+┌─────────────────────────────────────────────────────┐
+│  4. For each test()                                  │
+│                                                      │
+│   a) apiClient fixture                               │
+│      └─ Read token from .auth/token.json             │
+│      └─ Create APIClient(token)                      │
+│                                                      │
+│   b) API Call                                        │
+│      └─ GET /api/v1/... with Bearer token            │
+│      └─ Extract relevant value from response.body    │
+│                                                      │
+│   c) SQL Query                                       │
+│      └─ Read .sql file from queries/                 │
+│      └─ Replace {USER_ID} or {FAMILY_ID}             │
+│      └─ dbClient.query(sql)                          │
+│      └─ Extract column from rows[0]                  │
+│                                                      │
+│   d) Comparison                                      │
+│      └─ Normalize units (Cr/L/K → raw number)        │
+│      └─ Calculate diff% = |api - sql| / api * 100    │
+│      └─ Pass if diff% <= threshold (default 0.25%)   │
+│                                                      │
+│   e) Reporting                                       │
+│      └─ test.info().attach() → text + JSON files     │
+│      └─ expect(result.pass).toBe(true)               │
+└──────────────┬──────────────────────────────────────┘
+               │
+               ▼
+┌─────────────────────────────┐
+│  5. afterAll()              │  ← dbClient.close() — release pool
+└──────────────┬──────────────┘
+               │
+               ▼
+┌─────────────────────────────┐
+│  6. HTML Report Generation  │  ← playwright-report/index.html
+└─────────────────────────────┘
+```
+
+### Authentication Flow Detail
+
+```
+auth.setup.js
+    │
+    ├─ new AuthAPI()
+    ├─ POST {BASE_URL}/auth/v1/signup
+    │     body: { phone_number, full_name, recaptcha_token }
+    │
+    ├─ POST {BASE_URL}/auth/v1/verify-otp
+    │     body: { phone_number, otp }
+    │     response: { access_token }
+    │
+    └─ Write .auth/token.json → { accessToken: "eyJ..." }
+         also: process.env.ACCESS_TOKEN = token
+
+Per test → fixtures.js
+    │
+    ├─ Read process.env.ACCESS_TOKEN  (fast path)
+    │   OR fs.readFileSync('.auth/token.json')
+    │
+    └─ new APIClient(accessToken)
+         All requests: Authorization: Bearer {accessToken}
+```
+
+**Key point:** Authentication happens **once per run**, regardless of how many tests execute.
+
+---
+
+## 5. Validation Logic
+
+### 5.1 Core Comparison Function
+
+Located in `utils/testHelpers.js` → `compareApiWithSql()`:
+
+```javascript
+// Step 1: Load SQL from file
+let sqlQuery = fs.readFileSync(fullSqlPath, 'utf-8');
+sqlQuery = sqlQuery.replace(/{USER_ID}/g, userId);
+sqlQuery = sqlQuery.replace(/{END_DATE}/g, endDate);  // for historical queries
+
+// Step 2: Execute SQL
+const dbResult = await dbClient.query(sqlQuery);
+const rawSqlValue = dbResult.rows[0]?.[sqlColumn];
+
+// Step 3: Normalize both values to raw numbers
+const { value: apiNum, unit } = extractUnitAndValue(apiValue);  // e.g. "1.5 Cr" → {1.5, "Cr"}
+const apiBase = convertToUnit(apiNum, unit, true);               // → 15000000
+
+const sqlBase = parseFloat(rawSqlValue);
+
+// Step 4: Calculate difference
+const diff = Math.abs(apiBase - sqlBase);
+const diffPct = (diff / Math.abs(apiBase)) * 100;
+const pass = diffPct <= threshold;                               // default 0.25%
+```
+
+### 5.2 Unit Conversion System
+
+Located in `utils/comparison.js`:
+
+```javascript
+const DIVISORS = { 'Cr': 10000000, 'L': 100000, 'K': 1000 }
+
+// API returns: "1.13 Cr" or "₹1.13 Cr" or "113 L" or "1130000"
+// extractUnitAndValue("₹1.13 Cr") → { value: 1.13, unit: "Cr" }
+// convertToUnit(1.13, "Cr", toBase=true) → 11300000
+// convertToUnit(11300000, "L", toBase=false) → 113
+```
+
+### 5.3 Comparison Thresholds
+
+| Comparison Type | Threshold | Rationale |
+|---|---|---|
+| Monetary values (wealth, allocation) | **0.25%** | Small rounding tolerance |
+| Holdings counts | **0% (exact)** | Integer counts must be exact |
+| Risk contributor percentages | **0.25%** | Minor floating point tolerance |
+| Benchmark dates | **0% (exact)** | Date must be today |
+| Security overlap counts | **0% (exact)** | Count must match |
+| Dividends count | **0% (exact)** | Count must match |
+
+### 5.4 SQL Placeholder Pattern
+
+All SQL files use `{PLACEHOLDER}` syntax, replaced at runtime:
+
+| Placeholder | Source | Used In |
+|---|---|---|
+| `{USER_ID}` | `process.env.USER_ID` | All individual user queries |
+| `{FAMILY_ID}` | `process.env.FAMILY_ID` | All family queries |
+| `{END_DATE}` | Historical date loop | Historical allocation queries |
+| `{FILTER_CLASS}` | Filter parameter | Holdings count queries |
+| `{BENCHMARK_ID}` | env var | Benchmark queries |
+
+**Family Query Pattern:**
+```sql
+-- Individual user:
+WHERE user_id = {USER_ID}
+
+-- Family (aggregates all accepted members):
+WHERE user_id IN (
+    SELECT user_id FROM family_members 
+    WHERE family_id = {FAMILY_ID} AND is_invitation_accepted = true
+)
+```
+
+### 5.5 Multi-Unit API Value Handling
+
+For asset allocation endpoints that return an array of items with different units:
+
+```javascript
+// API returns: [{ amount: "1.5", unit: "Cr" }, { amount: "25", unit: "L" }]
+// sumValuesWithDifferentUnits(items) → 15000000 + 2500000 = 17500000
+// Then convert back to display unit for comparison
+const totalInLakhs = convertToUnit(totalBase, 'L');  // → 175
+```
+
+### 5.6 Historical Date Validation
+
+```javascript
+// HISTORICAL_DATES=2026-01-01,2025-06-01,2025-04-01,2025-01-01
+const dates = getHistoricalDates();  // ["2026-01-01", "2025-06-01", ...]
+
+historicalDates.forEach(testDate => {
+  test(`Asset Allocation for ${testDate}`, async ({ apiClient }) => {
+    // API call with specific date
+    const response = await apiClient.get(
+      dashboardEndpoints.historicalAssetAllocation(userId, testDate)
+    );
+    // SQL query with same date substituted
+    const result = await compareApiWithSql({
+      endDate: testDate,
+      sqlFilePath: 'historical_allocation_test.sql',
+      ...
+    });
+  });
+});
+```
+
+### 5.7 Risk Contributors Comparison (Name-based Matching)
+
+```javascript
+// SQL returns rows: [{ name: "Financial Services", portfolio_percentage: 43.58 }, ...]
+// API returns items: [{ name: "Financial Services", percentage: 44.05 }, ...]
+
+// Create map from SQL by name
+const sqlMap = {};
+dbResult.rows.forEach(row => {
+  sqlMap[row.name] = { percentage: parseFloat(row.portfolio_percentage) };
+});
+
+// Compare each API item by name lookup
+apiData.forEach(apiItem => {
+  const sqlItem = sqlMap[apiItem.name];
+  if (!sqlItem) { /* ❌ Not found in SQL */ }
+  else {
+    const diff = Math.abs(apiItem.percentage - sqlItem.percentage);
+    const pass = diff <= threshold;  // 0.25%
+  }
+});
+```
+
+---
+
+## 6. Environment & Configuration
+
+### 6.1 .env Variables Reference
+
+```bash
+# ── Database ──────────────────────────────────────────
+DB_HOST=                      # PostgreSQL server host/IP
+DB_PORT=5432                  # Default PostgreSQL port
+DB_NAME=                      # Database name
+DB_USER=                      # Database username
+DB_PASSWORD=                  # Database password
+DB_MAX_CONNECTIONS=10         # Pool size
+DB_IDLE_TIMEOUT_MS=30000      # Close idle connections after 30s
+DB_CONNECTION_TIMEOUT_MS=5000 # Fail if can't connect in 5s
+
+# ── API ───────────────────────────────────────────────
+BASE_URL=                     # e.g. https://api.yourdomain.com
+API_TIMEOUT_MS=30000          # Request timeout
+API_RETRY_COUNT=3             # Retry on failure
+API_RETRY_DELAY_MS=1000       # Delay between retries
+
+# ── Test User ─────────────────────────────────────────
+USER_ID=                      # Individual user ID for SQL queries
+PHONE_NUMBER=                 # Phone for authentication
+FULL_NAME=                    # Display name for signup
+OTP=                          # Static OTP (test environment)
+FAMILY_ID=                    # Family ID for family tests
+
+# ── Thresholds ────────────────────────────────────────
+COMPARISON_THRESHOLD_PCT=0.25 # Default tolerance: 0.25%
+
+# ── Dates ─────────────────────────────────────────────
+HISTORICAL_DATES=2026-01-01,2025-06-01,2025-04-01,2025-01-01
+YTD_START_DATE=               # Year-to-date start
+
+# ── Asset Class IDs ───────────────────────────────────
+ASSET_CLASS_ID_EQUITY=17
+ASSET_CLASS_ID_MUTUAL_FUNDS=21
+ASSET_CLASS_ID_ETF=18
+ASSET_CLASS_ID_NPS=16
+ASSET_CLASS_ID_BANK_DEPOSITS=22
+ASSET_CLASS_ID_FIXED_DEPOSITS=15
+ASSET_CLASS_ID_RECURRING_DEPOSITS=14
+ASSET_CLASS_ID_GOLD=20
+ASSET_CLASS_ID_CRYPTO=19
+ASSET_CLASS_ID_REAL_ESTATE=13
+ENTITY_TYPE=asset
+
+# ── Benchmarks ────────────────────────────────────────
+BENCHMARK=AUB3
+BENCHMARK_RANGES=1Y,2Y,3Y,4Y,5Y
+```
+
+### 6.2 playwright.config.js Settings
+
+```javascript
+{
+  testDir: './tests',          // All tests under tests/
+  globalSetup: './auth/auth.setup.js',
+  fullyParallel: false,        // ⚠️ Sequential — avoid API rate limits
+  workers: 1,                  // Single worker
+  retries: process.env.CI ? 1 : 0,
+  use: {
+    baseURL: process.env.BASE_URL,
+    trace: 'on-first-retry',      // Capture trace on failure
+    screenshot: 'only-on-failure',
+    video: 'on-first-retry'
+  }
+}
+```
+
+---
+
+## 7. Reporting
+
+### 7.1 HTML Report
+
+Playwright's built-in HTML reporter generates a full test report after each run.
+
+**Location:** `playwright-report/index.html`
+
+**Open report:**
+```bash
+npx playwright show-report
+# or
+npm run report
+```
+
+### 7.2 Test Attachments
+
+Every test attaches detailed comparison data:
+
+```javascript
+// Text attachment — human readable
+test.info().attach('comparison-summary.txt', {
+  body: `
+=== Total Wealth Verification ===
+API Value (UI):    ₹1.13 Cr
+SQL Value (DB):    ₹11,342,994.78
+Difference:        0.01%
+Threshold:         0.25%
+Result:            ✅ Within Threshold
+  `,
+  contentType: 'text/plain'
+});
+
+// JSON attachment — machine readable
+test.info().attach('comparison-details.json', {
+  body: JSON.stringify({ apiValue, sqlValue, diff, pass }, null, 2),
+  contentType: 'application/json'
+});
+```
+
+**Attachments are viewable directly in the HTML report** by clicking on any test.
+
+### 7.3 Console Logging
+
+Each test logs to console:
+- Full API response (formatted JSON)
+- Extracted values
+- Comparison report
+
+Visible during `--reporter=line` or `--headed` execution.
+
+### 7.4 Failure Artifacts
+
+On test failure, Playwright auto-captures:
+
+| Artifact | Location | When Captured |
+|---|---|---|
+| Screenshot | `test-results/*/` | On failure |
+| Video | `test-results/*/` | On first retry |
+| Trace | `test-results/*/` | On first retry |
+| Error context | `test-results/*/error-context.md` | On failure |
+
+---
+
+## 8. How to Execute Tests
+
+### 8.1 Run All Tests
+```bash
+npx playwright test
+# or
+npm test
+```
+
+### 8.2 Run Specific Folder
+
+```bash
+# Individual user dashboard tests
+npx playwright test tests/dashboard/
+
+# Individual user analysis tests
+npx playwright test tests/analysis/
+
+# Family dashboard tests
+npx playwright test tests/family/dashboard/
+
+# Family analysis tests
+npx playwright test tests/family/analysis/
+
+# All family tests
+npx playwright test tests/family/
+
+# Manage-assets dashboard tests
+npx playwright test tests/manage-assets/dashboard/
+
+# Manage-assets analysis tests
+npx playwright test tests/manage-assets/analysis/
+```
+
+### 8.3 Run Specific Test File
+
+```bash
+npx playwright test tests/dashboard/portfolio-summary.spec.js
+npx playwright test tests/analysis/holdings-count.spec.js
+npx playwright test tests/family/dashboard/portfolio-summary.spec.js
+npx playwright test tests/family/analysis/risk-contributors-equity.spec.js
+```
+
+### 8.4 Run with Reporter Options
+
+```bash
+# Verbose line output (shows each test result as it completes)
+npx playwright test tests/dashboard/ --reporter=line
+
+# Dot output (minimal)
+npx playwright test --reporter=dot
+
+# Only HTML report (no console output)
+npx playwright test --reporter=html
+```
+
+### 8.5 Debug Mode
+
+```bash
+# Debug a single test interactively
+npx playwright test tests/dashboard/portfolio-summary.spec.js --debug
+
+# Show browser window
+npx playwright test --headed
+npm run test:headed
+
+# UI mode (interactive test explorer)
+npx playwright test --ui
+npm run test:ui
+```
+
+### 8.6 Generate & Open HTML Report
+
+```bash
+# Generate report (happens automatically after test run)
+npx playwright test
+
+# Open the generated report
+npx playwright show-report
+npm run report
+```
+
+### 8.7 Run with Custom Environment
+
+```bash
+# Override specific env vars inline
+USER_ID=9999 FAMILY_ID=100 npx playwright test tests/family/
+
+# Use a different .env file
+# (Edit .env directly — no multi-env support currently)
+```
+
+---
+
+## 9. Utilities & Reusable Components
+
+### 9.1 `utils/comparison.js` — Value Comparison Engine
+
+| Function | Input | Output | Purpose |
+|---|---|---|---|
+| `extractUnitAndValue(str)` | `"₹1.5 Cr"` | `{ value: 1.5, unit: "Cr" }` | Parse API formatted string |
+| `convertToUnit(val, unit, toBase)` | `1.5, "Cr", true` | `15000000` | Convert between units |
+| `compareValues(api, db, threshold)` | `"1.5 Cr", 14990000, 0.25` | `{ pass, diff, diffPct }` | Core comparison |
+| `sumValuesWithDifferentUnits(arr)` | `[{amount, unit}, ...]` | `raw number` | Sum mixed-unit arrays |
+
+### 9.2 `utils/testHelpers.js` — Individual User Helpers
+
+| Function | Purpose |
+|---|---|
+| `compareApiWithSql({...})` | Generic API vs SQL single-value comparison |
+| `extractApiValue(body, path, finder)` | Navigate nested API response |
+| `compareHoldingsCount({...})` | Exact count comparison with filter support |
+| `compareDividendsCount({...})` | Exact dividends count comparison |
+| `compareRiskContributors({...})` | Name-based risk % comparison |
+| `compareBenchmarkValues({...})` | Benchmark row-by-row comparison |
+| `validateBenchmarkDate({...})` | Assert benchmark date = today |
+
+### 9.3 `utils/family/testHelpers.js` — Family User Helpers
+
+Mirrors `utils/testHelpers.js` with:
+- `familyId` parameter support
+- `{FAMILY_ID}` placeholder replacement in SQL
+- `familyId || userId` fallback pattern
+- All functions handle both scopes transparently
+
+### 9.4 `utils/historicalDateHelper.js` — Date Utilities
+
+| Function | Purpose |
+|---|---|
+| `getHistoricalDates()` | Parse `HISTORICAL_DATES` env var → array |
+| `formatDate(str)` | `"2024-01-01"` → `"January 1, 2024"` |
+| `validateHistoricalDates()` | Warn if any dates are in the future |
+| `replaceDateInSQL(sql, date)` | Replace `{END_DATE}` in SQL |
+| `getDaysDifference(d1, d2)` | Calculate day gap between two dates |
+
+### 9.5 `utils/db/dbClient.js` — Database Singleton
+
+```javascript
+// Imported as singleton across all tests
+import { dbClient } from '../../utils/db/dbClient.js';
+
+// Lifecycle
+await dbClient.init();          // Call in beforeAll()
+const result = await dbClient.query(sql);  // Use in tests
+await dbClient.close();         // Call in afterAll()
+
+// Result shape
+result.rows[0]?.columnName      // Standard pg result
+```
+
+### 9.6 `auth/apiClient.js` — HTTP Client
+
+```javascript
+const client = new APIClient(accessToken);
+await client.init();
+
+// Available methods
+const { status, body } = await client.get('/api/v1/...');
+const { status, body } = await client.post('/api/v1/...', bodyData);
+const { status, body } = await client.put('/api/v1/...', bodyData);
+const { status, body } = await client.delete('/api/v1/...');
+
+await client.dispose();
+```
+
+All methods throw on non-2xx responses with error format:
+```
+Error: API Error 422: {"detail": [...]}
+```
+
+### 9.7 `endpoints/` — API Registry Pattern
+
+```javascript
+// Import what you need
+import { dashboardEndpoints } from '../../endpoints/index.js';
+import { analysisEndpoints } from '../../endpoints/index.js';
+import { familyDashboardEndpoints } from '../../endpoints/index.js';
+import { familyAnalysisEndpoints } from '../../endpoints/index.js';
+
+// Usage — all endpoints are functions returning URL strings
+const url = dashboardEndpoints.portfolioSummary(userId);
+const url = familyDashboardEndpoints.assetAllocation(familyId);
+const url = analysisEndpoints.holdingsCount(userId);
+```
+
+---
+
+## 10. Best Practices Used
+
+### 10.1 Separation of Concerns
+
+| Layer | Responsibility | Files |
+|---|---|---|
+| Auth | Token acquisition & HTTP client | `auth/` |
+| Endpoints | URL construction | `endpoints/` |
+| Queries | SQL logic | `queries/` |
+| Utilities | Business comparison logic | `utils/` |
+| Tests | Orchestration + assertions | `tests/` |
+
+No test file contains SQL directly. No utility function contains assertions.
+
+### 10.2 Singleton DB Client
+
+`dbClient` is a module-level singleton. All tests in a `describe` block share one connection pool (opened in `beforeAll`, closed in `afterAll`), avoiding connection exhaustion.
+
+### 10.3 Global Setup for Authentication
+
+Authentication runs **exactly once** per test suite execution (`globalSetup`). Token is persisted to disk so any test can access it, even after process restarts.
+
+### 10.4 Parameterized SQL (No Hardcoding)
+
+All SQL files use `{USER_ID}`, `{FAMILY_ID}`, `{END_DATE}` placeholders. No user IDs or dates are hardcoded in SQL files. Values are injected at runtime from environment variables.
+
+### 10.5 Threshold Configuration via Environment
+
+The comparison threshold (`COMPARISON_THRESHOLD_PCT=0.25`) is environment-driven. Any test can override by passing a `threshold` parameter, but the default comes from `.env`. This means threshold adjustments don't require code changes.
+
+### 10.6 Mirrored Test Structure (Individual / Family / Manage-Assets)
+
+The three test scopes (`tests/dashboard/`, `tests/family/dashboard/`, `tests/manage-assets/dashboard/`) are kept structurally identical. Same test names, same SQL patterns — only the user scope and SQL file path differ.
+
+### 10.7 Rich Test Attachments
+
+Every test attaches both human-readable (`.txt`) and machine-readable (`.json`) comparison data to the Playwright HTML report. This eliminates the need to re-run tests to debug failures.
+
+### 10.8 Defensive SQL with COALESCE
+
+All SQL queries use `COALESCE(..., 0)` for every asset class sum. This ensures NULL values from missing accounts don't propagate and corrupt the grand total.
+
+---
+
+## 11. Suggestions & Improvements
+
+### 11.1 Environment Management
+
+**Current:** Single `.env` file, edited manually for each environment.
+
+**Recommendation:** Add support for multiple environment files:
+```bash
+.env.dev      → dev API + dev DB
+.env.staging  → staging API + staging DB
+.env.prod     → prod API + read-only prod DB
+```
+Run with: `ENV=staging npx playwright test`
+
+### 11.2 Parallel Execution
+
+**Current:** `workers: 1` (fully sequential).
+
+**Recommendation:** Group tests by DB connection scope and allow parallel execution within groups:
+```javascript
+// playwright.config.js
+fullyParallel: false,
+workers: 3,  // 3 workers, each with its own DB pool
+```
+Individual, family, and manage-assets suites are independent and can run in parallel.
+
+### 11.3 CI/CD Integration
+
+**Recommendation:** Add GitHub Actions workflow:
+```yaml
+# .github/workflows/api-validation.yml
+- name: Run API validation
+  run: npx playwright test
+  env:
+    DB_HOST: ${{ secrets.DB_HOST }}
+    USER_ID: ${{ secrets.USER_ID }}
+    BASE_URL: ${{ secrets.BASE_URL }}
+
+- name: Upload report
+  uses: actions/upload-artifact@v3
+  with:
+    name: playwright-report
+    path: playwright-report/
+```
+
+### 11.4 Centralized Threshold Configuration
+
+**Current:** `COMPARISON_THRESHOLD_PCT=0.25` applies globally; some tests hardcode `threshold: 0.25`.
+
+**Recommendation:** Create a `config/thresholds.js`:
+```javascript
+export const THRESHOLDS = {
+  MONETARY_VALUE: parseFloat(process.env.COMPARISON_THRESHOLD_PCT || '0.25'),
+  COUNT: 0,           // Always exact
+  RISK_PERCENTAGE: parseFloat(process.env.RISK_THRESHOLD_PCT || '0.25'),
+  BENCHMARK: 0        // Always exact
+};
+```
+
+### 11.5 SQL Query Validation
+
+**Current:** SQL errors surface as runtime test failures.
+
+**Recommendation:** Add a pre-flight validation step that dry-runs all SQL files with `EXPLAIN` before the test suite starts. Catches syntax errors early.
+
+### 11.6 Test Data Isolation
+
+**Current:** All tests share one `USER_ID` and `FAMILY_ID`.
+
+**Recommendation:** For CI, use dedicated read-only test users with known, stable data. This prevents live data changes from causing spurious failures.
+
+### 11.7 Retry Logic for API Calls
+
+**Current:** No retry on API failures; single failed request fails the test.
+
+**Recommendation:** Use `API_RETRY_COUNT` (already in env) inside `apiClient.js`:
+```javascript
+async get(endpoint, retries = parseInt(process.env.API_RETRY_COUNT || '3')) {
+  for (let i = 0; i < retries; i++) {
+    try { return await this._get(endpoint); }
+    catch (e) { if (i === retries - 1) throw e; await sleep(1000); }
+  }
+}
+```
+
+### 11.8 Consolidated Family SQL Scan
+
+**Current:** Family SQL files are manually reviewed for the `{FAMILY_ID}::integer AS user_id` anti-pattern.
+
+**Recommendation:** Add a linting script:
+```bash
+grep -rn "AS user_id" queries/family/
+```
+Run this in CI to catch regressions where family queries accidentally filter by a single user.
+
+### 11.9 Report Archiving
+
+**Current:** `playwright-report/` is overwritten on each run.
+
+**Recommendation:** Timestamp reports:
+```bash
+mv playwright-report "reports/run-$(date +%Y%m%d-%H%M%S)"
+```
+Or integrate with Playwright's `--output` flag for archiving by date/branch.
+
+### 11.10 Secrets Management
+
+**Current:** `.env` file with plain-text credentials.
+
+**Recommendation:** Use a secrets manager (AWS Secrets Manager, Vault, or GitHub Secrets) for CI. For local development, maintain `.env` but ensure `.gitignore` is respected.
+
+---
+
+## Quick Reference
+
+### Asset Class IDs
+
+| Asset Class | ID |
+|---|---|
+| Equity | 17 |
+| Mutual Funds | 21 |
+| ETF | 18 |
+| NPS | 16 |
+| Bank Deposits | 22 |
+| Fixed Deposits | 15 |
+| Recurring Deposits | 14 |
+| Gold | 20 |
+| Crypto | 19 |
+| Real Estate | 13 |
+
+### Comparison Thresholds
+
+| Type | Tolerance |
+|---|---|
+| Monetary values | 0.25% |
+| Holdings / dividend counts | 0% (exact) |
+| Risk contribution % | 0.25% |
+| Benchmark values | 0% (exact) |
+
+### Key SQL Patterns
+
+```sql
+-- Individual user filter
+WHERE user_id = {USER_ID}
+
+-- Family filter (always use this in queries/family/)
+WHERE user_id IN (
+    SELECT user_id FROM family_members
+    WHERE family_id = {FAMILY_ID} AND is_invitation_accepted = true
+)
+
+-- Historical date filter
+WHERE snapshot_date = '{END_DATE}'::date
+
+-- Asset class filter
+WHERE filter_class = 'ALL' OR asset_class = filter_class
+```
+
+---
+
+*Generated by CREST Automation Framework — Technical Documentation*
