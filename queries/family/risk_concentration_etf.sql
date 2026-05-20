@@ -162,8 +162,8 @@ SELECT
     sector_total
 FROM combined_results
 WHERE 
-    -- Show only sectors > 20% and assets > 10%
-    (level = 'sector' AND portfolio_percentage > 20)
+    -- Show only sectors > 15% and assets > 10%
+    (level = 'sector' AND portfolio_percentage > 15)
     OR (level = 'asset' AND portfolio_percentage > 10)
 ORDER BY 
     -- Priority: Sectors first, then assets
