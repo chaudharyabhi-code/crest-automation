@@ -113,7 +113,7 @@ SELECT * FROM (
             name,
 --            sector,
 --            ROUND(value::numeric, 2)       AS value,
-            pct                            AS percentage
+            pct                            AS portfolio_percentage
 --            ROUND(grand_total::numeric, 2) AS grand_total
         FROM all_items
         WHERE asset_type = 'STOCK' AND pct > 10
@@ -129,7 +129,7 @@ SELECT * FROM (
             name,
 --            sector,
 --            ROUND(value::numeric, 2)       AS value,
-            pct                            AS percentage
+            pct                            AS portfolio_percentage
 --            ROUND(grand_total::numeric, 2) AS grand_total
         FROM all_items
         WHERE asset_type = 'SECTOR' AND pct > 15

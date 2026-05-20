@@ -3,8 +3,7 @@
 -- Shows total exposure and overlap percentage
 
 WITH parameters AS (
-    SELECT 
-        {FAMILY_ID}::integer AS user_id,
+    SELECT
         2::integer AS decimal_places
 ),
 
@@ -19,7 +18,7 @@ equity_securities AS (
     FROM demat_holdings dh
     LEFT JOIN securities_master sm ON dh.security_id = sm.id
     CROSS JOIN parameters p
-    WHERE dh.user_id = p.user_id
+    WHERE dh.user_id IN (SELECT user_id FROM family_members WHERE family_id = {FAMILY_ID} AND is_invitation_accepted = true)
       AND dh.units > 0
       AND dh.deleted_at IS NULL
       AND dh.last_traded_price > 0
@@ -31,7 +30,7 @@ user_mf AS (
         mf.current_value
     FROM mf mf
     CROSS JOIN parameters p
-    WHERE mf.user_id = p.user_id
+    WHERE mf.user_id IN (SELECT user_id FROM family_members WHERE family_id = {FAMILY_ID} AND is_invitation_accepted = true)
       AND mf.deleted_at IS NULL
       AND mf.current_value > 0
     ORDER BY mf.user_id, mf.isin, mf.updated_at DESC
@@ -58,7 +57,7 @@ user_etf AS (
         eh.current_value
     FROM etf_holdings eh
     CROSS JOIN parameters p
-    WHERE eh.user_id = p.user_id
+    WHERE eh.user_id IN (SELECT user_id FROM family_members WHERE family_id = {FAMILY_ID} AND is_invitation_accepted = true)
       AND eh.deleted_at IS NULL
       AND eh.current_value > 0
     ORDER BY eh.user_id, eh.etf_account_id, eh.isin, eh.current_nav_date DESC NULLS LAST

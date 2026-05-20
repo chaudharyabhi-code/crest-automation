@@ -2,8 +2,7 @@
 -- Shows only sectors > 20% and assets > 10% concentration
 
 WITH parameters AS (
-    SELECT 
-        {FAMILY_ID}::integer AS user_id,
+    SELECT
         2::integer AS decimal_places,
         0::numeric AS min_value_filter
 ),
@@ -25,7 +24,7 @@ equity_assets AS (
     FROM demat_holdings dh
     LEFT JOIN securities_master sm ON dh.security_id = sm.id
     CROSS JOIN parameters p
-    WHERE dh.user_id = p.user_id
+    WHERE dh.user_id IN (SELECT user_id FROM family_members WHERE family_id = {FAMILY_ID} AND is_invitation_accepted = true)
       AND dh.units > 0
       AND dh.deleted_at IS NULL
       AND dh.last_traded_price > 0

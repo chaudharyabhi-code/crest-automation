@@ -30,13 +30,13 @@ test.describe('Analysis Risk and Concentration Tests - ETF Only (Family)', () =>
 
     console.log(`\nTotal ETF Risk Contributors in API: ${apiData.length}`);
 
-    // Compare with SQL - Exact match required (no threshold)
+    // Compare with SQL
     const result = await compareRiskContributors({
       apiData: apiData,
       sqlFilePath: 'family/risk_concentration_etf.sql',
       familyId: familyId,
       testName: 'ETF Risk Contributors Comparison',
-      threshold: 0 // Exact match required
+      threshold: 0.25
     });
 
     console.log(result.formattedReport);

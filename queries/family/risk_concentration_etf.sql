@@ -2,8 +2,7 @@
 -- Shows only sectors > 20% and assets > 10% concentration
 
 WITH parameters AS (
-    SELECT 
-        {FAMILY_ID}::integer AS user_id,
+    SELECT
         2::integer AS decimal_places,
         0::numeric AS min_value_filter
 ),
@@ -17,7 +16,7 @@ user_etf AS (
         eh.current_value
     FROM etf_holdings eh
     CROSS JOIN parameters p
-    WHERE eh.user_id = p.user_id
+    WHERE eh.user_id IN (SELECT user_id FROM family_members WHERE family_id = {FAMILY_ID} AND is_invitation_accepted = true)
       AND eh.deleted_at IS NULL
       AND eh.current_value > 0
     ORDER BY eh.user_id, eh.etf_account_id, eh.isin, eh.current_nav_date DESC NULLS LAST
